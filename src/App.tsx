@@ -1,122 +1,149 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState } from "react";
+import { getCircleAdapter } from "./circleAdapter";
+import "./App.css";
+
+const ARC_CHAIN_ID = "0x4ce8d2";
+const ARC_CHAIN_ID_DECIMAL = 5042002;
+const USDC_ADDRESS =
+  "0x3600000000000000000000000000000000000000" as `0x${string}`;
+
+type EthereumProvider = {
+  request: (args: {
+    method: string;
+    params?: unknown[];
+  }) => Promise<unknown>;
+};
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [address, setAddress] = useState("");
+  const [balance, setBalance] = useState("");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function connectWallet() {
+    try {
+      setLoading(true);
+      setStatus("Connecting wallet...");
+
+      const provider = (window as Window & {
+        ethereum?: EthereumProvider;
+      }).ethereum;
+
+      if (!provider) {
+        throw new Error("Rabby wallet was not found");
+      }
+
+      await provider.request({
+        method: "eth_requestAccounts",
+      });
+
+      try {
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: ARC_CHAIN_ID }],
+        });
+      } catch (error) {
+        const rpcError = error as { code?: number };
+
+        if (rpcError.code === 4902) {
+          throw new Error(
+            "Arc Testnet is not added to Rabby. Add it manually first.",
+          );
+        }
+
+        throw error;
+      }
+
+      const adapter = await getCircleAdapter();
+
+      if (!adapter.capabilities) {
+        throw new Error("Circle adapter capabilities are unavailable");
+      }
+
+      const chain = adapter.capabilities.supportedChains.find(
+        (item) =>
+          item.type === "evm" &&
+          "chainId" in item &&
+          item.chainId === ARC_CHAIN_ID_DECIMAL,
+      );
+
+      if (!chain || chain.type !== "evm") {
+        throw new Error("Arc Testnet is not supported by the Circle adapter");
+      }
+
+      const walletAddress = await adapter.getAddress(chain);
+      const client = await adapter.getPublicClient(chain);
+
+      const rawBalance = await client.readContract({
+        address: USDC_ADDRESS,
+        abi: [
+          {
+            name: "balanceOf",
+            type: "function",
+            stateMutability: "view",
+            inputs: [{ name: "account", type: "address" }],
+            outputs: [{ name: "balance", type: "uint256" }],
+          },
+        ],
+        functionName: "balanceOf",
+        args: [walletAddress as `0x${string}`],
+      });
+
+      setAddress(walletAddress);
+      setBalance(
+        (Number(rawBalance) / 1_000_000).toLocaleString("en-US", {
+          maximumFractionDigits: 6,
+        }),
+      );
+
+      setStatus("Connected to Arc Testnet");
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        error instanceof Error ? error.message : "Connection failed",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+    <main className="app">
+      <section className="card">
+        <div className="eyebrow">ARC USDC APP</div>
+
+        <h1>USDC on Arc Testnet</h1>
+
+        <p className="description">
+          Connect Rabby to view your USDC balance on Arc Testnet.
+        </p>
+
+        {!address ? (
+          <button
+            className="primary-button"
+            onClick={connectWallet}
+            disabled={loading}
+          >
+            {loading ? "Connecting..." : "Connect Wallet"}
+          </button>
+        ) : (
+          <div className="wallet-panel">
+            <div className="connected">● Wallet Connected</div>
+
+            <div className="label">Address</div>
+            <div className="address">{address}</div>
+
+            <div className="balance-box">
+              <span>USDC Balance</span>
+              <strong>{balance} USDC</strong>
+            </div>
+          </div>
+        )}
+
+        {status && <p className="status">{status}</p>}
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    </main>
+  );
 }
 
-export default App
+export default App;

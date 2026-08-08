@@ -2,8 +2,21 @@ import { useState } from "react";
 import { getCircleAdapter } from "./circleAdapter";
 import "./App.css";
 
-const ARC_CHAIN_ID = "0x4ce8d2";
-const ARC_CHAIN_ID_DECIMAL = 5042002;
+const ARC_CHAIN_ID = "0x4cef52";
+const ARC_CHAIN_ID_DECIMAL = 5044050;
+
+const ARC_CHAIN = {
+  chainId: ARC_CHAIN_ID,
+  chainName: "Arc Testnet",
+  nativeCurrency: {
+    name: "USDC",
+    symbol: "USDC",
+    decimals: 18,
+  },
+  rpcUrls: ["https://rpc.testnet.arc.network"],
+  blockExplorerUrls: ["https://testnet.arcscan.app"],
+};
+
 const USDC_ADDRESS =
   "0x3600000000000000000000000000000000000000" as `0x${string}`;
 
@@ -37,22 +50,55 @@ function App() {
         method: "eth_requestAccounts",
       });
 
+      setStatus("Checking Arc Testnet...");
+
       try {
         await provider.request({
           method: "wallet_switchEthereumChain",
           params: [{ chainId: ARC_CHAIN_ID }],
         });
       } catch (error) {
-        const rpcError = error as { code?: number };
+        const rpcError = error as {
+          code?: number;
+          message?: string;
+        };
 
-        if (rpcError.code === 4902) {
-          throw new Error(
-            "Arc Testnet is not added to Rabby. Add it manually first.",
-          );
+        const message = rpcError.message?.toLowerCase() ?? "";
+
+        const chainNotFound =
+          rpcError.code === 4902 ||
+          rpcError.code === -32603 ||
+          message.includes("unrecognized chain id") ||
+          message.includes("chain not found");
+
+        if (!chainNotFound) {
+          throw error;
         }
 
-        throw error;
+        setStatus("Adding Arc Testnet to Rabby...");
+
+        await provider.request({
+          method: "wallet_addEthereumChain",
+          params: [ARC_CHAIN],
+        });
+
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: ARC_CHAIN_ID }],
+        });
       }
+
+      const currentChainId = await provider.request({
+        method: "eth_chainId",
+      });
+
+      if (currentChainId !== ARC_CHAIN_ID) {
+        throw new Error(
+          `Wrong network. Current chain ID: ${String(currentChainId)}`,
+        );
+      }
+
+      setStatus("Connecting to Circle adapter...");
 
       const adapter = await getCircleAdapter();
 
@@ -68,11 +114,16 @@ function App() {
       );
 
       if (!chain || chain.type !== "evm") {
-        throw new Error("Arc Testnet is not supported by the Circle adapter");
+        throw new Error(
+          "Arc Testnet is not supported by the Circle adapter",
+        );
       }
 
       const walletAddress = await adapter.getAddress(chain);
+
       const client = await adapter.getPublicClient(chain);
+
+      setStatus("Reading USDC balance...");
 
       const rawBalance = await client.readContract({
         address: USDC_ADDRESS,
@@ -81,26 +132,42 @@ function App() {
             name: "balanceOf",
             type: "function",
             stateMutability: "view",
-            inputs: [{ name: "account", type: "address" }],
-            outputs: [{ name: "balance", type: "uint256" }],
+            inputs: [
+              {
+                name: "account",
+                type: "address",
+              },
+            ],
+            outputs: [
+              {
+                name: "balance",
+                type: "uint256",
+              },
+            ],
           },
         ],
         functionName: "balanceOf",
         args: [walletAddress as `0x${string}`],
       });
 
+      const formattedBalance =
+        Number(rawBalance) / 1_000_000;
+
       setAddress(walletAddress);
       setBalance(
-        (Number(rawBalance) / 1_000_000).toLocaleString("en-US", {
+        formattedBalance.toLocaleString("en-US", {
           maximumFractionDigits: 6,
         }),
       );
 
       setStatus("Connected to Arc Testnet");
     } catch (error) {
-      console.error(error);
+      console.error("Connection error:", error);
+
       setStatus(
-        error instanceof Error ? error.message : "Connection failed",
+        error instanceof Error
+          ? error.message
+          : "Connection failed",
       );
     } finally {
       setLoading(false);
@@ -128,10 +195,15 @@ function App() {
           </button>
         ) : (
           <div className="wallet-panel">
-            <div className="connected">● Wallet Connected</div>
+            <div className="connected">
+              ● Wallet Connected
+            </div>
 
             <div className="label">Address</div>
-            <div className="address">{address}</div>
+
+            <div className="address">
+              {address}
+            </div>
 
             <div className="balance-box">
               <span>USDC Balance</span>
@@ -140,7 +212,11 @@ function App() {
           </div>
         )}
 
-        {status && <p className="status">{status}</p>}
+        {status && (
+          <p className="status">
+            {status}
+          </p>
+        )}
       </section>
     </main>
   );

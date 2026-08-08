@@ -1,24 +1,31 @@
 import { useState } from "react";
-import { getCircleAdapter } from "./circleAdapter";
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  type Address,
+} from "viem";
 import "./App.css";
 
-const ARC_CHAIN_ID = "0x4cef52";
-const ARC_CHAIN_ID_DECIMAL = 5044050;
+const ARC_CHAIN_ID = 5044050;
+const ARC_CHAIN_ID_HEX = "0x4cef52" as const;
+const ARC_RPC = "https://rpc.testnet.arc.network";
 
-const ARC_CHAIN = {
-  chainId: ARC_CHAIN_ID,
-  chainName: "Arc Testnet",
+const arcTestnet = {
+  id: ARC_CHAIN_ID,
+  name: "Arc Testnet",
   nativeCurrency: {
     name: "USDC",
     symbol: "USDC",
     decimals: 18,
   },
-  rpcUrls: ["https://rpc.testnet.arc.network"],
-  blockExplorerUrls: ["https://testnet.arcscan.app"],
-};
-
-const USDC_ADDRESS =
-  "0x3600000000000000000000000000000000000000" as `0x${string}`;
+  rpcUrls: {
+    default: {
+      http: [ARC_RPC],
+    },
+  },
+} as const;
 
 type EthereumProvider = {
   request: (args: {
@@ -28,196 +35,158 @@ type EthereumProvider = {
 };
 
 function App() {
-  const [address, setAddress] = useState("");
-  const [balance, setBalance] = useState("");
-  const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [address, setAddress] = useState<Address | null>(null);
+  const [chainId, setChainId] = useState<string | null>(null);
+  const [status, setStatus] = useState("Ready");
+  const [error, setError] = useState("");
 
   async function connectWallet() {
-    try {
-      setLoading(true);
-      setStatus("Connecting wallet...");
+    setError("");
+    setStatus("Connecting...");
 
-      const provider = (window as Window & {
+    try {
+      const ethereum = (window as Window & {
         ethereum?: EthereumProvider;
       }).ethereum;
 
-      if (!provider) {
-        throw new Error("Rabby wallet was not found");
+      if (!ethereum) {
+        throw new Error("Rabby wallet was not found.");
       }
 
-      await provider.request({
+      const accounts = (await ethereum.request({
         method: "eth_requestAccounts",
-      });
+      })) as string[];
 
-      setStatus("Checking Arc Testnet...");
+      if (!accounts.length) {
+        throw new Error("No wallet account returned.");
+      }
 
-      try {
-        await provider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: ARC_CHAIN_ID }],
-        });
-      } catch (error) {
-        const rpcError = error as {
-          code?: number;
-          message?: string;
-        };
+      let currentChainId = (await ethereum.request({
+        method: "eth_chainId",
+      })) as string;
 
-        const message = rpcError.message?.toLowerCase() ?? "";
+      if (currentChainId !== ARC_CHAIN_ID_HEX) {
+        try {
+          await ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: ARC_CHAIN_ID_HEX }],
+          });
+        } catch (switchError: unknown) {
+          const code =
+            typeof switchError === "object" &&
+            switchError !== null &&
+            "code" in switchError
+              ? (switchError as { code?: number }).code
+              : undefined;
 
-        const chainNotFound =
-          rpcError.code === 4902 ||
-          rpcError.code === -32603 ||
-          message.includes("unrecognized chain id") ||
-          message.includes("chain not found");
-
-        if (!chainNotFound) {
-          throw error;
+          if (code === 4902 || code === -32603) {
+            await ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [
+                {
+                  chainId: ARC_CHAIN_ID_HEX,
+                  chainName: "Arc Testnet",
+                  nativeCurrency: {
+                    name: "USDC",
+                    symbol: "USDC",
+                    decimals: 18,
+                  },
+                  rpcUrls: [ARC_RPC],
+                  blockExplorerUrls: ["https://testnet.arcscan.app"],
+                },
+              ],
+            });
+          } else {
+            throw switchError;
+          }
         }
 
-        setStatus("Adding Arc Testnet to Rabby...");
-
-        await provider.request({
-          method: "wallet_addEthereumChain",
-          params: [ARC_CHAIN],
-        });
-
-        await provider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: ARC_CHAIN_ID }],
-        });
+        currentChainId = (await ethereum.request({
+          method: "eth_chainId",
+        })) as string;
       }
 
-      const currentChainId = await provider.request({
-        method: "eth_chainId",
-      });
-
-      if (currentChainId !== ARC_CHAIN_ID) {
+      if (currentChainId !== ARC_CHAIN_ID_HEX) {
         throw new Error(
-          `Wrong network. Current chain ID: ${String(currentChainId)}`,
+          `Wrong network. Rabby returned ${currentChainId} instead of ${ARC_CHAIN_ID_HEX}.`,
         );
       }
 
-      setStatus("Connecting to Circle adapter...");
-
-      const adapter = await getCircleAdapter();
-
-      if (!adapter.capabilities) {
-        throw new Error("Circle adapter capabilities are unavailable");
-      }
-
-      const chain = adapter.capabilities.supportedChains.find(
-        (item) =>
-          item.type === "evm" &&
-          "chainId" in item &&
-          item.chainId === ARC_CHAIN_ID_DECIMAL,
-      );
-
-      if (!chain || chain.type !== "evm") {
-        throw new Error(
-          "Arc Testnet is not supported by the Circle adapter",
-        );
-      }
-
-      const walletAddress = await adapter.getAddress(chain);
-
-      const client = await adapter.getPublicClient(chain);
-
-      setStatus("Reading USDC balance...");
-
-      const rawBalance = await client.readContract({
-        address: USDC_ADDRESS,
-        abi: [
-          {
-            name: "balanceOf",
-            type: "function",
-            stateMutability: "view",
-            inputs: [
-              {
-                name: "account",
-                type: "address",
-              },
-            ],
-            outputs: [
-              {
-                name: "balance",
-                type: "uint256",
-              },
-            ],
-          },
-        ],
-        functionName: "balanceOf",
-        args: [walletAddress as `0x${string}`],
+      const walletClient = createWalletClient({
+        chain: arcTestnet,
+        transport: custom(ethereum),
       });
 
-      const formattedBalance =
-        Number(rawBalance) / 1_000_000;
+      const walletAddresses = await walletClient.getAddresses();
 
-      setAddress(walletAddress);
-      setBalance(
-        formattedBalance.toLocaleString("en-US", {
-          maximumFractionDigits: 6,
-        }),
-      );
+      if (!walletAddresses.length) {
+        throw new Error("Rabby did not return an address.");
+      }
 
-      setStatus("Connected to Arc Testnet");
-    } catch (error) {
-      console.error("Connection error:", error);
+      const publicClient = createPublicClient({
+        chain: arcTestnet,
+        transport: http(ARC_RPC),
+      });
 
-      setStatus(
-        error instanceof Error
-          ? error.message
-          : "Connection failed",
-      );
-    } finally {
-      setLoading(false);
+      const blockNumber = await publicClient.getBlockNumber();
+
+      setAddress(walletAddresses[0]);
+      setChainId(currentChainId);
+      setStatus(`Connected. Arc block ${blockNumber.toString()}`);
+    } catch (err) {
+      console.error(err);
+      setStatus("Connection failed");
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
-  return (
-    <main className="app">
-      <section className="card">
-        <div className="eyebrow">ARC USDC APP</div>
+  function disconnectWallet() {
+    setAddress(null);
+    setChainId(null);
+    setStatus("Disconnected");
+    setError("");
+  }
 
-        <h1>USDC on Arc Testnet</h1>
+  return (
+    <main>
+      <div className="app">
+        <h1>ARC USDC APP</h1>
+
+        <h2>USDC on Arc Testnet</h2>
 
         <p className="description">
           Connect Rabby to view your USDC balance on Arc Testnet.
         </p>
 
         {!address ? (
-          <button
-            className="primary-button"
-            onClick={connectWallet}
-            disabled={loading}
-          >
-            {loading ? "Connecting..." : "Connect Wallet"}
+          <button type="button" onClick={connectWallet}>
+            Connect Wallet
           </button>
         ) : (
-          <div className="wallet-panel">
-            <div className="connected">
-              ● Wallet Connected
-            </div>
+          <button type="button" onClick={disconnectWallet}>
+            Disconnect
+          </button>
+        )}
 
-            <div className="label">Address</div>
+        <p>{status}</p>
 
-            <div className="address">
-              {address}
-            </div>
+        {address && (
+          <div>
+            <p>
+              <strong>Wallet:</strong>{" "}
+              <code>
+                {address.slice(0, 6)}...{address.slice(-4)}
+              </code>
+            </p>
 
-            <div className="balance-box">
-              <span>USDC Balance</span>
-              <strong>{balance} USDC</strong>
-            </div>
+            <p>
+              <strong>Chain ID:</strong> <code>{chainId}</code>
+            </p>
           </div>
         )}
 
-        {status && (
-          <p className="status">
-            {status}
-          </p>
-        )}
-      </section>
+        {error && <p>{error}</p>}
+      </div>
     </main>
   );
 }

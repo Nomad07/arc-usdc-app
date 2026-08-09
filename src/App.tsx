@@ -3,14 +3,23 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  formatUnits,
   http,
+  parseAbi,
   type Address,
 } from "viem";
 import "./App.css";
 
-const ARC_CHAIN_ID = 5044050;
+const ARC_CHAIN_ID = 5042002;
 const ARC_CHAIN_ID_HEX = "0x4cef52" as const;
 const ARC_RPC = "https://rpc.testnet.arc.network";
+
+const USDC_ADDRESS =
+  "0x3600000000000000000000000000000000000000" as Address;
+
+const USDC_ABI = parseAbi([
+  "function balanceOf(address owner) view returns (uint256)",
+]);
 
 const arcTestnet = {
   id: ARC_CHAIN_ID,
@@ -37,12 +46,14 @@ type EthereumProvider = {
 function App() {
   const [address, setAddress] = useState<Address | null>(null);
   const [chainId, setChainId] = useState<string | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
   const [status, setStatus] = useState("Ready");
   const [error, setError] = useState("");
 
   async function connectWallet() {
     setError("");
     setStatus("Connecting...");
+    setUsdcBalance(null);
 
     try {
       const ethereum = (window as Window & {
@@ -123,6 +134,8 @@ function App() {
         throw new Error("Rabby did not return an address.");
       }
 
+      const walletAddress = walletAddresses[0];
+
       const publicClient = createPublicClient({
         chain: arcTestnet,
         transport: http(ARC_RPC),
@@ -130,8 +143,16 @@ function App() {
 
       const blockNumber = await publicClient.getBlockNumber();
 
-      setAddress(walletAddresses[0]);
+      const balance = await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: "balanceOf",
+        args: [walletAddress],
+      });
+
+      setAddress(walletAddress);
       setChainId(currentChainId);
+      setUsdcBalance(formatUnits(balance, 6));
       setStatus(`Connected. Arc block ${blockNumber.toString()}`);
     } catch (err) {
       console.error(err);
@@ -143,15 +164,14 @@ function App() {
   function disconnectWallet() {
     setAddress(null);
     setChainId(null);
+    setUsdcBalance(null);
     setStatus("Disconnected");
     setError("");
   }
 
   return (
     <main>
-      <div className="app">
-        <h1>ARC USDC APP</h1>
-
+      <div>
         <h2>USDC on Arc Testnet</h2>
 
         <p className="description">
@@ -181,6 +201,11 @@ function App() {
 
             <p>
               <strong>Chain ID:</strong> <code>{chainId}</code>
+            </p>
+
+            <p>
+              <strong>USDC Balance:</strong>{" "}
+              <code>{usdcBalance ?? "Loading..."}</code> USDC
             </p>
           </div>
         )}

@@ -13,6 +13,7 @@ import "./App.css";
 const ARC_CHAIN_ID = 5042002;
 const ARC_CHAIN_ID_HEX = "0x4cef52" as const;
 const ARC_RPC = "https://rpc.testnet.arc.network";
+const ARC_EXPLORER = "https://testnet.arcscan.app";
 
 const USDC_ADDRESS =
   "0x3600000000000000000000000000000000000000" as Address;
@@ -104,7 +105,7 @@ function App() {
                     decimals: 18,
                   },
                   rpcUrls: [ARC_RPC],
-                  blockExplorerUrls: ["https://testnet.arcscan.app"],
+                  blockExplorerUrls: [ARC_EXPLORER],
                 },
               ],
             });
@@ -239,6 +240,16 @@ function App() {
               <code>
                 {address.slice(0, 6)}...{address.slice(-4)}
               </code>
+            </p>
+
+            <p>
+              <a
+                href={`${ARC_EXPLORER}/address/${address}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                View wallet on ArcScan
+              </a>
             </p>
 
             <p>

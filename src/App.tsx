@@ -49,6 +49,7 @@ function App() {
   const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
   const [status, setStatus] = useState("Ready");
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   async function connectWallet() {
     setError("");
@@ -161,6 +162,37 @@ function App() {
     }
   }
 
+  async function refreshBalance() {
+    if (!address) return;
+
+    setRefreshing(true);
+    setError("");
+
+    try {
+      const publicClient = createPublicClient({
+        chain: arcTestnet,
+        transport: http(ARC_RPC),
+      });
+
+      const balance = await publicClient.readContract({
+        address: USDC_ADDRESS,
+        abi: USDC_ABI,
+        functionName: "balanceOf",
+        args: [address],
+      });
+
+      const blockNumber = await publicClient.getBlockNumber();
+
+      setUsdcBalance(formatUnits(balance, 6));
+      setStatus(`Connected. Arc block ${blockNumber.toString()}`);
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   function disconnectWallet() {
     setAddress(null);
     setChainId(null);
@@ -172,7 +204,7 @@ function App() {
   return (
     <main>
       <div>
-        <h2>USDC on Arc Testnet</h2>
+        <h1>USDC on Arc Testnet</h1>
 
         <p className="description">
           Connect Rabby to view your USDC balance on Arc Testnet.
@@ -183,9 +215,19 @@ function App() {
             Connect Wallet
           </button>
         ) : (
-          <button type="button" onClick={disconnectWallet}>
-            Disconnect
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={refreshBalance}
+              disabled={refreshing}
+            >
+              {refreshing ? "Refreshing..." : "Refresh Balance"}
+            </button>
+
+            <button type="button" onClick={disconnectWallet}>
+              Disconnect
+            </button>
+          </>
         )}
 
         <p>{status}</p>

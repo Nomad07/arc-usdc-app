@@ -1,75 +1,135 @@
-# React + TypeScript + Vite
+# Arc USDC App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React and TypeScript dApp for interacting with Arc Testnet and reading USDC wallet information directly through the Arc RPC.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Connect an EVM wallet
+- Connect Rabby and compatible browser wallets
+- Switch to Arc Testnet
+- Verify Arc Testnet Chain ID
+- Display connected wallet address
+- Display the current Arc block number
+- Read USDC balance directly through Arc RPC
+- Display the current USDC balance
+- Disconnect the connected wallet
+- Show Arc network connection status
+- Browser-based interface
 
-## React Compiler
+## Network
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The application is currently configured for Arc Testnet.
 
-## Expanding the ESLint configuration
+- Network: Arc Testnet
+- Chain ID: `5042002`
+- Hex Chain ID: `0x4cef52`
+- RPC: `https://rpc.testnet.arc.network`
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## USDC
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+The application reads the USDC balance directly from the Arc Testnet RPC.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- Token: USDC
+- Decimals: `6`
+- Contract: `0x3600000000000000000000000000000000000000`
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Requirements
 
-```
+- Node.js 20+
+- npm
+- An EVM-compatible browser wallet such as Rabby or MetaMask
+- Arc Testnet access
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Installation
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Clone the repository:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+    git clone https://github.com/Nomad07/arc-usdc-app.git
+    cd arc-usdc-app
 
-```
+Install dependencies:
+
+    npm install
+
+## Development
+
+Start the development server:
+
+    npm run dev
+
+Open the local development URL shown by Vite in your browser.
+
+Connect your wallet and switch to Arc Testnet when prompted.
+
+## How It Works
+
+The application connects the browser wallet to Arc Testnet and verifies the active network before reading wallet information.
+
+The main flow is:
+
+    Connect Wallet
+        ↓
+    Switch to Arc Testnet
+        ↓
+    Verify Chain ID
+        ↓
+    Read Wallet Address
+        ↓
+    Read Current Arc Block
+        ↓
+    Read USDC Balance
+        ↓
+    Display Wallet Information
+
+USDC balance data is read directly through the Arc RPC rather than relying on a third-party wallet adapter for the token balance.
+
+## Example
+
+Example wallet information:
+
+    Arc Testnet
+
+    Chain ID: 5042002
+    Wallet: 0x...
+    Current Block: 56800000
+
+    USDC Balance
+    41.796567 USDC
+
+The interface also provides a Disconnect action for ending the current wallet connection.
+
+## Project Status
+
+Arc USDC App is an experimental developer project built to explore wallet connectivity and direct RPC interaction with Arc Testnet.
+
+Current functionality focuses on:
+
+- EVM wallet connection
+- Arc Testnet network switching
+- Wallet information
+- Arc block information
+- Direct USDC balance reading
+- Wallet disconnect
+
+Future versions may explore additional USDC interactions and Arc-based payment functionality.
+
+## Security
+
+The application does not require users to enter or store their private keys.
+
+Transactions, when added in future versions, should be signed directly by the connected browser wallet.
+
+Never share your wallet seed phrase or private key with the application.
+
+## Tech Stack
+
+- React
+- TypeScript
+- Vite
+- EVM-compatible browser wallets
+- Arc Testnet
+- Web3 RPC
+
+## License
+
+MIT License
